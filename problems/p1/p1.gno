@@ -1,10 +1,5 @@
 package p1
 
-import (
-	"fmt"
-	"os"
-)
-
 func Problem(s string) string {
 	runes := []rune(s)
 	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
