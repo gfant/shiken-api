@@ -6,7 +6,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 type codeRequest struct {
@@ -45,36 +47,34 @@ func RunCode(w http.ResponseWriter, r *http.Request) {
 func executeCode(code, problemId string) (string, error) {
 	var output string
 
-	err := setupEnvironment(code, problemId)
+	_, testFile, err := setupEnvironment(code, problemId)
 	if err != nil {
 		return "", err
 	}
-	/*
-		// Executes a bash command to run this code
-		cmd := exec.Command("gno", "test", filepath)
-		bytes, err := cmd.Output()
-		if err != nil {
-			return "0", nil
-		}
-		output = string(bytes[:])
-	*/
+
+	// Executes a bash command to run this code
+	output, err = EvalCode(testFile)
+	if err != nil {
+		return "", err
+	}
 	return output, nil
 }
 
-func setupEnvironment(code, problemId string) error {
+func setupEnvironment(code, problemId string) (string, string, error) {
 	fileroute := fmt.Sprintf("p%s/p%s.gno", problemId, problemId)
+	testFileroute := fmt.Sprintf("p%s/p%s_test.gno", problemId, problemId)
 
 	path := filepath.Join(tmpTestingFolder, fileroute)
 	if err := generateCodeFolder(path); err != nil {
-		return err
+		return "", "", err
 	}
 	if err := generateCodeFile(code, path); err != nil {
-		return err
+		return "", "", err
 	}
-	if err := copyTestFile(problemId); err != nil {
-		return err
+	if err := copyTestFileAndGnoMod(problemId); err != nil {
+		return "", "", err
 	}
-	return nil
+	return path, testFileroute, nil
 }
 
 // Creates a tmp folder where everything will be tested
@@ -94,11 +94,23 @@ func generateCodeFile(code, path string) error {
 	return nil
 }
 
-func copyTestFile(problemId string) error {
+func copyTestFileAndGnoMod(problemId string) error {
 	testFile := fmt.Sprintf("p%s/p%s_test.gno", problemId, problemId)
-	src := filepath.Join(problemsPath, testFile)
-	dst := filepath.Join(tmpTestingFolder, testFile)
-	fmt.Println(src, dst)
+	// testfile
+	if err := copyFromSource(testFile); err != nil {
+		return err
+	}
+	// gnomod
+	gnoMod := fmt.Sprintf("p%s/gno.mod", problemId)
+	if err := copyFromSource(gnoMod); err != nil {
+		return err
+	}
+	return nil
+}
+
+func copyFromSource(file string) error {
+	src := filepath.Join(problemsPath, file)
+	dst := filepath.Join(tmpTestingFolder, file)
 	err := CopyFile(src, dst)
 	if err != nil {
 		return err
@@ -129,6 +141,69 @@ func CopyFile(src, dst string) error {
 
 	// Ensure all data is written to the destination file
 	err = destinationFile.Sync()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func EvalCode(testFileRoute string) (string, error) {
+	// Getting data for file and dirs
+	testFileDir := filepath.Dir(testFileRoute)
+	testFile := filepath.Base(testFileRoute)
+	tmpTestFileDir := filepath.Join(tmpTestingFolder, testFileDir)
+
+	testUserCode := fmt.Sprintf("gno test %s 2>&1", testFile)
+
+	userCodeChannel := make(chan string)
+	userErrorChannel := make(chan error)
+	//SecurityTaskChannel := make(chan string)
+
+	go runUserCode(tmpTestFileDir, testUserCode, userCodeChannel, userErrorChannel)
+
+	time.Sleep(1 * time.Second)
+
+	var codeUserResult string
+	select {
+	case codeUserResult = <-userCodeChannel:
+		fmt.Printf("Code submitted: %s", codeUserResult)
+	default:
+		codeUserResult = ""
+	}
+	var err error
+	select {
+	case err = <-userErrorChannel:
+		if err != nil {
+			return "", err
+		}
+	default:
+		err = nil
+	}
+	go runSecurityTask(testUserCode)
+
+	//return string(output), nil
+	return "", nil
+}
+
+func runUserCode(tmpTestFileDir, testUserCode string, resultChannel chan<- string, errorChannel chan<- error) {
+	TestUserCodeCommand := fmt.Sprintf("export GNOTESTPATH=$(pwd); cd $GNOTESTPATH/%s; gno mod tidy; %s", tmpTestFileDir, testUserCode)
+	execCommand := exec.Command("sh", "-c", TestUserCodeCommand)
+	output, err := execCommand.Output()
+
+	if err != nil {
+		errorChannel <- err
+	}
+	resultChannel <- string(output)
+}
+
+func runSecurityTask(testUserCode string) error {
+	SecurityTaskCommand := fmt.Sprintf("ps aux | grep %s", testUserCode)
+	execSecurityTask := exec.Command("sh", "-c", SecurityTaskCommand)
+	bytes, err := execSecurityTask.Output()
+	output := string(bytes)
+	fmt.Println("runSecurityTask: output: %s", output)
+	fmt.Println("runSecurityTask: testUserCode: %s", testUserCode)
 	if err != nil {
 		return err
 	}
