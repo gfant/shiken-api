@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -154,7 +155,7 @@ func EvalCode(testFileRoute string) (string, error) {
 	testFile := filepath.Base(testFileRoute)
 	tmpTestFileDir := filepath.Join(tmpTestingFolder, testFileDir)
 
-	testUserCode := fmt.Sprintf("gno test %s 2>&1", testFile)
+	testUserCode := fmt.Sprintf("gno test %s", testFile)
 
 	userCodeChannel := make(chan string)
 	userErrorChannel := make(chan error)
@@ -180,14 +181,15 @@ func EvalCode(testFileRoute string) (string, error) {
 	default:
 		err = nil
 	}
-	go runSecurityTask(testUserCode)
+	if codeUserResult == "" && err == nil {
+		go runSecurityTask(testUserCode)
+	}
 
-	//return string(output), nil
-	return "", nil
+	return string(codeUserResult), nil
 }
 
 func runUserCode(tmpTestFileDir, testUserCode string, resultChannel chan<- string, errorChannel chan<- error) {
-	TestUserCodeCommand := fmt.Sprintf("export GNOTESTPATH=$(pwd); cd $GNOTESTPATH/%s; gno mod tidy; %s", tmpTestFileDir, testUserCode)
+	TestUserCodeCommand := fmt.Sprintf("export GNOTESTPATH=$(pwd); cd $GNOTESTPATH/%s; gno mod tidy; %s 2>&1", tmpTestFileDir, testUserCode)
 	execCommand := exec.Command("sh", "-c", TestUserCodeCommand)
 	output, err := execCommand.Output()
 
@@ -198,15 +200,32 @@ func runUserCode(tmpTestFileDir, testUserCode string, resultChannel chan<- strin
 }
 
 func runSecurityTask(testUserCode string) error {
-	SecurityTaskCommand := fmt.Sprintf("ps aux | grep %s", testUserCode)
+	SecurityTaskCommand := fmt.Sprintf("ps aux | grep '%s' | grep -v 'grep'", testUserCode)
 	execSecurityTask := exec.Command("sh", "-c", SecurityTaskCommand)
 	bytes, err := execSecurityTask.Output()
-	output := string(bytes)
-	fmt.Println("runSecurityTask: output: %s", output)
-	fmt.Println("runSecurityTask: testUserCode: %s", testUserCode)
 	if err != nil {
 		return err
 	}
+	output := string(bytes)
 
+	pids := strings.Split(output, "\n")
+	fmt.Printf("\nUser code timeout. Starting clean up")
+	for _, process := range pids {
+		if len(strings.TrimSpace(process)) == 0 {
+			continue
+		}
+		fields := strings.Fields(process)
+		pid := fields[1]
+		fmt.Printf("\nKilling pid %s...", pid)
+		killCommand := fmt.Sprintf("kill %s", pid)
+		killing := exec.Command("sh", "-c", killCommand)
+		_, err := killing.Output()
+		if err != nil {
+			fmt.Printf("Kill Process crashed: %s: %s", pid, err)
+			return err
+		}
+		fmt.Printf("done")
+
+	}
 	return nil
 }
