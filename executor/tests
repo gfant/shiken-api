@@ -1,0 +1,3 @@
+"code": "package p1\nfunc Problem(s string) string {\ncounter:=0\nfor{counter++}\nreturn string(counter)\n}"
+
+"code":"package p1\nfunc Problem(s string) string {\nrunes := []rune(s)\nfor i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {\nrunes[i], runes[j] = runes[j], runes[i]\n}\nreturn string(runes)\n}"

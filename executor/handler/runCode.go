@@ -22,6 +22,15 @@ type EvalResponse struct {
 	Error  error  `json:"error"`
 }
 
+type codeEnvironment struct {
+	TmpFolder       string // Tmp file name for storing all testings
+	ProblemFile     string // Name created for Problem file
+	TestProblemFile string // Name created for Testing file
+	Result          string // Result of code execution
+	Code            string // Data Related to code of user
+	ProblemId       string // Data Related to problem requested by user
+}
+
 func RunCode(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
@@ -35,7 +44,15 @@ func RunCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	execution, err := executeCode(req.Code, req.ProblemId)
+	env := codeEnvironment{
+		TmpFolder:       tmpTestingFolder,
+		ProblemFile:     fmt.Sprintf("p%s/p%s.gno", req.ProblemId, req.ProblemId),
+		TestProblemFile: fmt.Sprintf("p%s/p%s_test.gno", req.ProblemId, req.ProblemId),
+		Code:            req.Code,
+		ProblemId:       req.ProblemId,
+	}
+
+	execution, err := env.executeCode()
 
 	resp := EvalResponse{Output: execution, Error: err}
 	w.Header().Set("Content-Type", "application/json")
@@ -45,41 +62,40 @@ func RunCode(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func executeCode(code, problemId string) (string, error) {
+func (env codeEnvironment) executeCode() (string, error) {
 	var output string
 
-	_, testFile, err := setupEnvironment(code, problemId)
+	_, err := env.setupEnvironment()
 	if err != nil {
 		return "", err
 	}
 
 	// Executes a bash command to run this code
-	output, err = EvalCode(testFile)
+	output, err = env.evalCode()
 	if err != nil {
 		return "", err
 	}
 	return output, nil
 }
 
-func setupEnvironment(code, problemId string) (string, string, error) {
-	fileroute := fmt.Sprintf("p%s/p%s.gno", problemId, problemId)
-	testFileroute := fmt.Sprintf("p%s/p%s_test.gno", problemId, problemId)
+func (env codeEnvironment) setupEnvironment() (string, error) {
+	// Files required to test and their structure
 
-	path := filepath.Join(tmpTestingFolder, fileroute)
-	if err := generateCodeFolder(path); err != nil {
-		return "", "", err
+	path := filepath.Join(headPath, env.TmpFolder, env.ProblemFile)
+	if err := generateFolderPath(path); err != nil {
+		return "", err
 	}
-	if err := generateCodeFile(code, path); err != nil {
-		return "", "", err
+	if err := generateFileToPath(env.Code, path); err != nil {
+		return "", err
 	}
-	if err := copyTestFileAndGnoMod(problemId); err != nil {
-		return "", "", err
+	if err := env.copyTestFileAndGnoMod(env.ProblemId); err != nil {
+		return "", err
 	}
-	return path, testFileroute, nil
+	return path, nil
 }
 
 // Creates a tmp folder where everything will be tested
-func generateCodeFolder(path string) error {
+func generateFolderPath(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
@@ -87,7 +103,7 @@ func generateCodeFolder(path string) error {
 }
 
 // Creates the gno file to test the code of the user
-func generateCodeFile(code, path string) error {
+func generateFileToPath(code, path string) error {
 	codebytes := []byte(code)
 	if err := os.WriteFile(path, codebytes, 0744); err != nil {
 		return err
@@ -95,23 +111,22 @@ func generateCodeFile(code, path string) error {
 	return nil
 }
 
-func copyTestFileAndGnoMod(problemId string) error {
-	testFile := fmt.Sprintf("p%s/p%s_test.gno", problemId, problemId)
+func (env codeEnvironment) copyTestFileAndGnoMod(problemId string) error {
 	// testfile
-	if err := copyFromSource(testFile); err != nil {
+	if err := env.copyEnvProblem(env.TestProblemFile); err != nil {
 		return err
 	}
 	// gnomod
 	gnoMod := fmt.Sprintf("p%s/gno.mod", problemId)
-	if err := copyFromSource(gnoMod); err != nil {
+	if err := env.copyEnvProblem(gnoMod); err != nil {
 		return err
 	}
 	return nil
 }
 
-func copyFromSource(file string) error {
-	src := filepath.Join(problemsPath, file)
-	dst := filepath.Join(tmpTestingFolder, file)
+func (env codeEnvironment) copyEnvProblem(file string) error {
+	src := filepath.Join(headPath, problemsPath, file)
+	dst := filepath.Join(headPath, env.TmpFolder, file)
 	err := CopyFile(src, dst)
 	if err != nil {
 		return err
@@ -149,19 +164,16 @@ func CopyFile(src, dst string) error {
 	return nil
 }
 
-func EvalCode(testFileRoute string) (string, error) {
+func (env codeEnvironment) evalCode() (string, error) {
 	// Getting data for file and dirs
-	testFileDir := filepath.Dir(testFileRoute)
-	testFile := filepath.Base(testFileRoute)
-	tmpTestFileDir := filepath.Join(tmpTestingFolder, testFileDir)
-
-	testUserCode := fmt.Sprintf("gno test %s", testFile)
+	testFilePath := filepath.Join(headPath, env.TmpFolder, env.TestProblemFile)
+	testFileDir := filepath.Dir(testFilePath)
+	testFile := filepath.Base(testFilePath)
+	testUserCodeCommand := fmt.Sprintf("gno test %s", testFile)
 
 	userCodeChannel := make(chan string)
 	userErrorChannel := make(chan error)
-	//SecurityTaskChannel := make(chan string)
-
-	go runUserCode(tmpTestFileDir, testUserCode, userCodeChannel, userErrorChannel)
+	go runUserCode(testFileDir, testUserCodeCommand, userCodeChannel, userErrorChannel)
 
 	time.Sleep(1 * time.Second)
 
@@ -182,14 +194,14 @@ func EvalCode(testFileRoute string) (string, error) {
 		err = nil
 	}
 	if codeUserResult == "" && err == nil {
-		go runSecurityTask(testUserCode)
+		go runSecurityTask(testUserCodeCommand)
 	}
 
 	return string(codeUserResult), nil
 }
 
-func runUserCode(tmpTestFileDir, testUserCode string, resultChannel chan<- string, errorChannel chan<- error) {
-	TestUserCodeCommand := fmt.Sprintf("export GNOTESTPATH=$(pwd); cd $GNOTESTPATH/%s; gno mod tidy; %s 2>&1", tmpTestFileDir, testUserCode)
+func runUserCode(testFileDir, testUserCode string, resultChannel chan<- string, errorChannel chan<- error) {
+	TestUserCodeCommand := fmt.Sprintf("cd %s; gno mod tidy; %s 2>&1", testFileDir, testUserCode)
 	execCommand := exec.Command("sh", "-c", TestUserCodeCommand)
 	output, err := execCommand.Output()
 
