@@ -175,7 +175,7 @@ func (env codeEnvironment) evalCode() (string, error) {
 	userErrorChannel := make(chan error)
 	go runUserCode(testFileDir, testUserCodeCommand, userCodeChannel, userErrorChannel)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	var codeUserResult string
 	select {
