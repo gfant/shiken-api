@@ -1,0 +1,5 @@
+{
+    "title": "Primes under n",
+    "statement": "Create a function `Problem` that counts the number of primes under n. (A prime is a number that its only positive divisors are 1 and itself)",
+    "examples": ["2->0","20->8","1000000->78498"]
+}

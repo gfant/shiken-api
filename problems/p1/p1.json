@@ -1,0 +1,5 @@
+{
+    "title": "Revert the strings",
+    "statement": "Create a function `Problem` that revers the given stirng.",
+    "examples": ["'gno'->'ong'","'dao'->'oad'","'very long sentence'->'ecnetnes gnol yrev'"]
+}
