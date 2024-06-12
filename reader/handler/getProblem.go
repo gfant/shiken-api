@@ -3,7 +3,11 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 type ProblemRequest struct {
@@ -11,8 +15,10 @@ type ProblemRequest struct {
 }
 
 type ProblemContent struct {
-	Content string `json:"content"`
-	Error   error  `json:"error"`
+	Statement string   `json:"statement"`
+	Title     string   `json:"title"`
+	Examples  []string `json:"examples"`
+	Error     error    `json:"error"`
 }
 
 func GetProblem(w http.ResponseWriter, r *http.Request) {
@@ -21,24 +27,34 @@ func GetProblem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req ProblemRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		badReq := fmt.Sprintf("Bad Req %s", r.Body)
-		http.Error(w, badReq, http.StatusBadRequest)
-		return
+	path := r.URL.Path
+
+	pathParts := strings.Split(path, "/")
+	problemId := pathParts[len(pathParts)-1]
+	fmt.Sprint(problemId)
+	problemContent, err := getProblem(problemId)
+	if err != nil {
+		problemContent = ProblemContent{Error: err}
 	}
 
-	problemId := req.ProblemId
-	execution, err := getProblem(problemId)
-	resp := ProblemContent{Content: execution, Error: err}
-
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
+	if err := json.NewEncoder(w).Encode(problemContent); err != nil {
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
 		return
 	}
 }
 
-func getProblem(problemId string) (string, error) {
-	return problemId, nil
+func getProblem(problemId string) (ProblemContent, error) {
+	// Main Path + Problems Folder + Specific Problem folder + json file
+	pathToProblemContent := filepath.Join(headPath, problemsFolder, fmt.Sprintf("p%s", problemId), fmt.Sprintf("p%s.json", problemId))
+	jsonFile, err := os.Open(pathToProblemContent)
+	if err != nil {
+		return ProblemContent{}, err
+	}
+	defer jsonFile.Close()
+	byteValue, _ := io.ReadAll(jsonFile)
+	var result ProblemContent
+	json.Unmarshal([]byte(byteValue), &result)
+
+	return result, nil
 }
