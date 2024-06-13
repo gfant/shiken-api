@@ -9,11 +9,11 @@ func TestProblem(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"hola", "aloh"},
-		{"mundo", "odnum"},
-		{"", ""},
-		{"a", "a"},
-		{"ab", "ba"},
+		{"gnoland", "gnlnd"},
+		{"hola", "hl"},
+		{"mundo", "mnd"},
+		{"jorin", "jrn"},
+		{"this is amazing", "ths s mzng"},
 	}
 
 	for _, test := range tests {

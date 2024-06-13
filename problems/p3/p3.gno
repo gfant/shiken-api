@@ -1,9 +1,13 @@
 package p1
 
+import "strings"
+
 func Problem(s string) string {
-	runes := []rune(s)
-	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
-		runes[i], runes[j] = runes[j], runes[i]
+	result := ""
+	for _, c := range s {
+		if c != 'a' && c != 'e' && c != 'i' && c != 'o' && c != 'u' {
+			result = result + string(c)
+		}
 	}
-	return string(runes)
+	return result
 }
