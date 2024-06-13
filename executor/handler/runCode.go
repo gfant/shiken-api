@@ -36,6 +36,7 @@ func RunCode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 
 	var req codeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
