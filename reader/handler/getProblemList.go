@@ -2,7 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 type problemListRequest struct {
@@ -30,5 +35,21 @@ func GetProblemList(w http.ResponseWriter, r *http.Request) {
 }
 
 func getProblemList() ([]string, error) {
-	return []string{"1", "2", "3"}, nil
+	absolutePathToProblems := filepath.Join(headPath, problemsFolder)
+	lsCommand := fmt.Sprintf(`cd %s; ls -la | grep "p\d"`, absolutePathToProblems)
+	listExec := exec.Command("sh", "-c", lsCommand)
+	output, err := listExec.Output()
+	if err != nil {
+		return []string{}, err
+	}
+	listArr := strings.Split(string(output), "\n")
+	listArr = listArr[:len(listArr)-1]
+	response := []string{}
+	for idx, line := range listArr {
+		parts := strings.Split(line, " ")
+		last := parts[len(parts)-1]
+		problem := fmt.Sprintf("Problem %s : %s", strconv.Itoa(idx+1), last)
+		response = append(response, problem)
+	}
+	return response, nil
 }

@@ -31,7 +31,7 @@ func GetProblem(w http.ResponseWriter, r *http.Request) {
 
 	pathParts := strings.Split(path, "/")
 	problemId := pathParts[len(pathParts)-1]
-	fmt.Sprint(problemId)
+
 	problemContent, err := getProblem(problemId)
 	if err != nil {
 		problemContent = ProblemContent{Error: err}
