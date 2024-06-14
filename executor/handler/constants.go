@@ -1,7 +1,7 @@
 package handler
 
 const (
-	headPath         = "/Users/iam-agf/github/shiken_server"
+	headPath         = "/home/ec2-user/Shiken-api"
 	problemsPath     = "problems"
 	tmpTestingFolder = "tmp"
 )
