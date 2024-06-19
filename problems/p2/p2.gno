@@ -1,4 +1,4 @@
-package p2
+package p
 
 func Problem(num int) int {
 	if num < 2 {

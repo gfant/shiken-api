@@ -1,4 +1,4 @@
-package p1
+package p
 
 func Problem(s string) string {
 	runes := []rune(s)
