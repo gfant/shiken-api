@@ -1,4 +1,4 @@
-package p
+package shikentest
 
 import "strings"
 

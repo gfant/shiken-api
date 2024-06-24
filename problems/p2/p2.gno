@@ -1,4 +1,4 @@
-package p
+package shikentest
 
 func Problem(num int) int {
 	if num < 2 {

@@ -1,4 +1,4 @@
-package p
+package shikentest
 
 func Problem(s string) string {
 	runes := []rune(s)
