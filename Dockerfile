@@ -31,5 +31,5 @@ RUN mkdir apps
 WORKDIR /root/shiken-api/executor
 RUN go build main.go && chmod +x main && mv main /apps/
 CMD ["pm2-runtime", "start", "/apps/main"]
-EXPOSE 8081
+EXPOSE 80
 # docker build -t shiken .
