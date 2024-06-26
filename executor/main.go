@@ -9,10 +9,11 @@ import (
 func main() {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/run", handler.Run)
+	mux.HandleFunc("/run", handler.RunHandler)
+	mux.HandleFunc("/ping", handler.PingHandler)
 	corsHandler := setupCORS(mux)
 
-	if err := http.ListenAndServe(":8081", corsHandler); err != nil {
+	if err := http.ListenAndServe(":80", corsHandler); err != nil {
 		fmt.Printf("Error starting server: %s\n", err)
 	}
 }
