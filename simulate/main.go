@@ -23,7 +23,7 @@ func main() {
 	}
 
 	// Initialize the RPC client
-	rpc, err := rpcclient.NewHTTPClient("http://127.0.0.1:26657")
+	rpc, err := rpcclient.NewHTTPClient("tcp://127.0.0.1:26657")
 	if err != nil {
 		panic(err)
 	}
@@ -75,21 +75,21 @@ func main() {
 
 func makeTx(funcName string, args []string, accountRes *std.BaseAccount, client gnoclient.Client) error {
 	txCfg := gnoclient.BaseTxCfg{
-		GasFee:         "1000000ugnot",                 // gas price
-		GasWanted:      1000000,                        // gas limit
-		AccountNumber:  accountRes.GetAccountNumber(),  // account ID
-		SequenceNumber: accountRes.GetSequence(),       // account nonce
-		Memo:           "This is a cool how-to guide!", // transaction memo
+		GasFee:         "1000000ugnot",                // gas price
+		GasWanted:      2000000,                       // gas limit
+		AccountNumber:  accountRes.GetAccountNumber(), // account ID
+		SequenceNumber: accountRes.GetSequence(),      // account nonce
+		Memo:           "",                            // transaction memo
 	}
 
 	msg := gnoclient.MsgCall{
-		PkgPath:  "gno.land/r/demo/shiken", // wrapped ugnot realm path
-		FuncName: funcName,                 // function to call
-		Args:     nil,                      // arguments in string format
-		Send:     "1000000ugnot",           // coins to send along with transaction
+		PkgPath:  "gno.land/r/dev/shiken", // wrapped ugnot realm path
+		FuncName: funcName,                // function to call
+		Args:     args,                    // arguments in string format
 	}
 	res, err := client.Call(txCfg, msg)
 	if err != nil {
+		fmt.Println(res)
 		panic(err)
 	}
 
