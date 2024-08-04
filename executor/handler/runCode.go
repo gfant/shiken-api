@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/creack/pty"
 )
 
 type codeRequest struct {
@@ -250,49 +248,29 @@ func runSecurityTask(testUserCode string) error {
 	return nil
 }
 
-func sendResult(req codeRequest, result string) error {
-	command := fmt.Sprintf(`gnokey maketx call \
-	-pkgpath "gno.land/r/dev/shiken" \
-	-func "AddNewScore" \
-	-gas-fee 1000000ugnot \
-	-gas-wanted 2000000 \
-	-send "" \
-	-broadcast \
-	-chainid "dev" \
-	-args "%s" \
-	-args "%s" \
-	-args "%s" \
-	-args "%s" \
-	-remote "tcp://127.0.0.1:26657" \
-	g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5`, req.Address, req.ProblemId, result, "")
-	// Crear el comando con sh -c
-	cmd := exec.Command("sh", "-c", command)
-
-	// Crear un pseudo-terminal (PTY)
-	ptmx, err := pty.Start(cmd)
+func sendResult(cReq codeRequest, result string) {
+	account, client := SetupRegisterEnvironment(
+		"/Users/iam-agf/Library/Application Support/gno",
+		"g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5",
+		"dev",
+		"tcp://127.0.0.1:26657",
+	)
+	err := MakeTx(
+		"gno.land/r/dev/shiken",
+		"1000000ugnot",
+		"",
+		"AddNewScore",
+		2000000,
+		[]string{
+			cReq.Address,
+			cReq.ProblemId,
+			result,
+			"",
+		},
+		account,
+		client,
+	)
 	if err != nil {
-		fmt.Println("Error starting PTY:", err)
-		return err
+		panic(err)
 	}
-	// Asegurarse de cerrar el PTY al final
-	defer func() { _ = ptmx.Close() }()
-
-	// Redirigir la salida del PTY a stdout y stderr
-	go func() { _, _ = io.Copy(os.Stdout, ptmx) }()
-	go func() { _, _ = io.Copy(os.Stderr, ptmx) }()
-
-	// Escribir la entrada simulada (Enter) en el PTY
-	_, err = ptmx.Write([]byte("\n"))
-	if err != nil {
-		fmt.Println("Error writing en PTY:", err)
-		return err
-	}
-
-	// Esperar a que el comando termine
-	if err := cmd.Wait(); err != nil {
-		fmt.Println("Error command fulfill", err)
-		return err
-	}
-
-	return nil
 }
