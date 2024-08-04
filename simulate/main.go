@@ -89,10 +89,10 @@ func makeTx(funcName string, args []string, accountRes *std.BaseAccount, client 
 	}
 	res, err := client.Call(txCfg, msg)
 	if err != nil {
-		fmt.Println(res)
 		panic(err)
 	}
 
+	fmt.Println("Tx completed for %s", funcName)
 	fmt.Println(res)
 	return nil
 }
