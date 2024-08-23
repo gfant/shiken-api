@@ -103,8 +103,8 @@ func (env codeEnvironment) executeCode() (string, error) {
 	return output, nil
 }
 
+// Setup the environment filers and folders for the code to be executed
 func (env codeEnvironment) setupEnvironment() (string, error) {
-	// Files required to test and their structure
 
 	path := filepath.Join(headPath, env.TmpFolder, env.ProblemFile)
 	if err := generateFolderPath(path); err != nil {
@@ -136,6 +136,7 @@ func generateFileToPath(code, path string) error {
 	return nil
 }
 
+// Copy the test file and the gno.mod file to the tmp folder
 func (env codeEnvironment) copyTestFileAndGnoMod(problemId string) error {
 	// testfile
 	if err := env.copyEnvProblem(env.TestProblemFile); err != nil {
@@ -149,6 +150,7 @@ func (env codeEnvironment) copyTestFileAndGnoMod(problemId string) error {
 	return nil
 }
 
+// Copies files into the tmp folder
 func (env codeEnvironment) copyEnvProblem(file string) error {
 	src := filepath.Join(headPath, problemsPath, file)
 	dst := filepath.Join(headPath, env.TmpFolder, file)
@@ -159,6 +161,7 @@ func (env codeEnvironment) copyEnvProblem(file string) error {
 	return nil
 }
 
+// Copies a file from src to dst
 func CopyFile(src, dst string) error {
 	// Open the source file
 	sourceFile, err := os.Open(src)
@@ -191,14 +194,14 @@ func CopyFile(src, dst string) error {
 
 func (env codeEnvironment) evalCode() (string, error) {
 	// Getting data for file and dirs
-	testFilePath := filepath.Join(headPath, env.TmpFolder, env.TestProblemFile)
-	testFileDir := filepath.Dir(testFilePath)
-	testFile := filepath.Base(testFilePath)
-	testUserCodeCommand := fmt.Sprintf("gno test %s", testFile)
+	path := filepath.Join(headPath, env.TmpFolder, env.TestProblemFile)
+	dirName := filepath.Dir(path)
+	file := filepath.Base(path)
+	gnoTestFile := fmt.Sprintf("gno test %s", file)
 
 	userCodeChannel := make(chan string)
 	userErrorChannel := make(chan error)
-	go runUserCode(testFileDir, testUserCodeCommand, userCodeChannel, userErrorChannel)
+	go runUserCode(dirName, gnoTestFile, userCodeChannel, userErrorChannel)
 
 	time.Sleep(3 * time.Second)
 
@@ -219,33 +222,57 @@ func (env codeEnvironment) evalCode() (string, error) {
 		err = nil
 	}
 	if codeUserResult == "" && err == nil {
-		go runSecurityTask(testUserCodeCommand)
+		go runSecurityTask(gnoTestFile)
 	}
 
 	return string(codeUserResult), nil
 }
 
 func runUserCode(testFileDir, testUserCode string, resultChannel chan<- string, errorChannel chan<- error) {
-	TestUserCodeCommand := fmt.Sprintf("cd %s; gno mod tidy; %s 2>&1", testFileDir, testUserCode)
-	execCommand := exec.Command("sh", "-c", TestUserCodeCommand)
+	cmdTestUserCode := fmt.Sprintf("cd %s; gno mod tidy; %s 2>&1", testFileDir, testUserCode)
+	execCommand := exec.Command("sh", "-c", cmdTestUserCode)
 	output, err := execCommand.Output()
-
 	if err != nil {
 		errorChannel <- err
 	}
 	resultChannel <- string(output)
 }
 
+func createFilterCommand(testUserCode string) string {
+	return fmt.Sprintf("ps aux | grep '%s' | grep -v 'grep'", testUserCode)
+}
+
+func getPIDFromOutput(commandExecuted *exec.Cmd) ([]string, error) {
+	bytes, err := commandExecuted.Output()
+	if err != nil {
+		return nil, err
+	}
+	output := string(bytes)
+	pids := strings.Split(output, "\n")
+	return pids, nil
+}
+
+func killProcessByPID(pid string) error {
+	fmt.Printf("\nKilling pid %s...", pid)
+	killCommand := fmt.Sprintf("kill %s", pid)
+	killing := exec.Command("sh", "-c", killCommand)
+	_, err := killing.Output()
+	if err != nil {
+		fmt.Printf("Kill Process crashed: %s: %s", pid, err)
+		return err
+	}
+	return nil
+}
+
 func runSecurityTask(testUserCode string) error {
-	SecurityTaskCommand := fmt.Sprintf("ps aux | grep '%s' | grep -v 'grep'", testUserCode)
+	SecurityTaskCommand := createFilterCommand(testUserCode)
 	execSecurityTask := exec.Command("sh", "-c", SecurityTaskCommand)
-	bytes, err := execSecurityTask.Output()
+
+	pids, err := getPIDFromOutput(execSecurityTask)
 	if err != nil {
 		return err
 	}
-	output := string(bytes)
 
-	pids := strings.Split(output, "\n")
 	fmt.Printf("\nUser code timeout. Starting clean up")
 	for _, process := range pids {
 		if len(strings.TrimSpace(process)) == 0 {
@@ -253,12 +280,8 @@ func runSecurityTask(testUserCode string) error {
 		}
 		fields := strings.Fields(process)
 		pid := fields[1]
-		fmt.Printf("\nKilling pid %s...", pid)
-		killCommand := fmt.Sprintf("kill %s", pid)
-		killing := exec.Command("sh", "-c", killCommand)
-		_, err := killing.Output()
+		err := killProcessByPID(pid)
 		if err != nil {
-			fmt.Printf("Kill Process crashed: %s: %s", pid, err)
 			return err
 		}
 		fmt.Printf("done")
