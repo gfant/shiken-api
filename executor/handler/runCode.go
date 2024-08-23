@@ -33,39 +33,58 @@ type codeEnvironment struct {
 	ProblemId       string // Data Related to problem requested by user
 }
 
-func RunHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+// Check if the request is valid. Otherwise will return an http.error
+func validateRequest(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
 		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
-		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+}
 
-	var req codeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		badReq := fmt.Sprintf("Bad Req %s", r.Body)
+// Get the Request Body and checks if it is valid. Otherwise will return an http.error
+func decodeRequestBody(w http.ResponseWriter, req *http.Request) codeRequest {
+	var cReq codeRequest
+	if err := json.NewDecoder(req.Body).Decode(&cReq); err != nil {
+		badReq := fmt.Sprintf("Bad Req %s", req.Body)
 		http.Error(w, badReq, http.StatusBadRequest)
-		return
 	}
+	return cReq
+}
 
-	env := codeEnvironment{
+// Generate the environment for the code to be executed
+func generateCodeEnvironment(req codeRequest) codeEnvironment {
+	return codeEnvironment{
 		TmpFolder:       tmpTestingFolder,
 		ProblemFile:     fmt.Sprintf("p%s/p%s.gno", req.ProblemId, req.ProblemId),
 		TestProblemFile: fmt.Sprintf("p%s/p%s_test.gno", req.ProblemId, req.ProblemId),
 		Code:            req.Code,
 		ProblemId:       req.ProblemId,
 	}
+}
 
-	execution, err := env.executeCode()
-
-	// The execution ended and now you have to send it
-	sendResult(req, execution)
-
-	resp := EvalResponse{Output: execution, Error: err}
+func sendResponseBack(w http.ResponseWriter, resp EvalResponse) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
 		return
 	}
+}
+
+func RunHandler(w http.ResponseWriter, r *http.Request) {
+	validateRequest(w, r)
+	w.Header().Set("Content-Type", "application/json")
+	req := decodeRequestBody(w, r)
+	// Environment to use for the code
+	env := generateCodeEnvironment(req)
+
+	// Execute the code and get the result
+	execution, err := env.executeCode()
+
+	// The execution ended and now you have to send it
+	sendResultOnchain(req, execution)
+
+	// Send the result to the user
+	resp := EvalResponse{Output: execution, Error: err}
+	sendResponseBack(w, resp)
 }
 
 func (env codeEnvironment) executeCode() (string, error) {
@@ -248,7 +267,7 @@ func runSecurityTask(testUserCode string) error {
 	return nil
 }
 
-func sendResult(cReq codeRequest, result string) {
+func sendResultOnchain(cReq codeRequest, result string) {
 	account, client := SetupRegisterEnvironment(
 		"/Users/iam-agf/Library/Application Support/gno",
 		"g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5",
